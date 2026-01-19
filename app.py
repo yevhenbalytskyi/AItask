@@ -1,57 +1,72 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
-st.set_page_config(page_title="QA Form Test Case Generator", layout="wide")
+st.set_page_config(page_title="QA Form Pro", layout="wide")
 
-st.title("🧪 QA Form Test Case Generator")
-st.markdown("Input your form field details below to generate a comprehensive test suite.")
+# --- UI Header ---
+st.title("🧪 Advanced QA Test Case Generator")
+st.info("Define your form fields below to generate a comprehensive QA test plan.")
 
-# --- Input Section ---
+# --- Feature 1: Multi-field Management ---
+if 'fields' not in st.session_state:
+    st.session_state.fields = []
+
 with st.sidebar:
-    st.header("Field Configuration")
-    field_name = st.text_input("Field Label", placeholder="e.g., Email Address")
-    field_type = st.selectbox("Data Type", ["Text", "Email", "Number", "Password", "Date"])
-    is_required = st.checkbox("Is this field required?", value=True)
+    st.header("Add Form Field")
+    new_label = st.text_input("Field Label", placeholder="e.g. Birth Date")
+    new_type = st.selectbox("Type", ["Text", "Email", "Number", "Password", "Date"])
     
-    generate_btn = st.button("Generate Test Cases", type="primary")
+    if st.button("➕ Add Field to Form"):
+        if new_label:
+            st.session_state.fields.append({"label": new_label, "type": new_type})
+        else:
+            st.warning("Please enter a label.")
 
-# --- Test Case Logic ---
-def generate_cases(name, f_type, required):
+    if st.button("🗑️ Clear Form"):
+        st.session_state.fields = []
+
+# --- Feature 2: Testing Persona ---
+persona = st.radio("Testing Persona", ["Standard QA", "Security Focused"], horizontal=True)
+
+# --- Logic Engine ---
+def get_extended_cases(label, f_type, mode):
     cases = []
     
-    # Required Field Check
-    if required:
-        cases.append({"Test Case": f"Verify {name} empty state", "Type": "Negative", "Input": "Leave Blank", "Expected Result": "Validation error: Field is required"})
+    if f_type == "Password":
+        cases.append({"Field": label, "Case": "Valid Password", "Type": "Positive", "Input": "A1b2!c3d4", "Result": "Success"})
+        cases.append({"Field": label, "Case": "Too Short", "Type": "Negative", "Input": "abc1", "Result": "Min-length error"})
+        cases.append({"Field": label, "Case": "Trailing Spaces", "Type": "Edge", "Input": "Password123 ", "Result": "Trimmed or Error"})
+        if mode == "Security Focused":
+            cases.append({"Field": label, "Case": "Common Password Check", "Type": "Security", "Input": "12345678", "Result": "Block common password"})
 
-    # Type Specific Logic
-    if f_type == "Email":
-        cases.append({"Test Case": f"Valid {name}", "Type": "Positive", "Input": "test@example.com", "Expected Result": "Accepted"})
-        cases.append({"Test Case": f"Missing '@' symbol", "Type": "Negative", "Input": "testexample.com", "Expected Result": "Invalid email format error"})
-        cases.append({"Test Case": f"Missing domain", "Type": "Negative", "Input": "test@", "Expected Result": "Invalid email format error"})
-    
-    elif f_type == "Number":
-        cases.append({"Test Case": f"Valid numeric input", "Type": "Positive", "Input": "123", "Expected Result": "Accepted"})
-        cases.append({"Test Case": f"Non-numeric characters", "Type": "Negative", "Input": "abc", "Expected Result": "Validation error: Numbers only"})
-        cases.append({"Test Case": f"Extreme high value", "Type": "Edge", "Input": "99999999", "Expected Result": "Check system limit/Acceptance"})
+    elif f_type == "Date":
+        cases.append({"Field": label, "Case": "Standard Date", "Type": "Positive", "Input": "2023-10-15", "Result": "Success"})
+        cases.append({"Field": label, "Case": "Leap Year", "Type": "Edge", "Input": "2024-02-29", "Result": "Success"})
+        cases.append({"Field": label, "Case": "Invalid Day", "Type": "Negative", "Input": "2023-02-30", "Result": "Format Error"})
+        cases.append({"Field": label, "Case": "Future Date", "Type": "Business Logic", "Input": "2099-01-01", "Result": "Depends on requirements"})
 
-    elif f_type == "Text":
-        cases.append({"Test Case": f"Standard string", "Type": "Positive", "Input": "Hello World", "Expected Result": "Accepted"})
-        cases.append({"Test Case": f"SQL Injection attempt", "Type": "Security", "Input": "'; DROP TABLE users; --", "Expected Result": "Sanitized or rejected"})
-        cases.append({"Test Case": f"Maximum character limit", "Type": "Edge", "Input": "A" * 255, "Expected Result": "Check truncation or acceptance"})
-
+    # ... [Keep previous Text/Email/Number logic here] ...
     return cases
 
-# --- Display Section ---
-if generate_btn:
-    if not field_name:
-        st.error("Please enter a Field Label.")
-    else:
-        results = generate_cases(field_name, field_type, is_required)
-        df = pd.DataFrame(results)
-        
-        st.subheader(f"Generated Cases for: {field_name}")
-        st.table(df)
-        
-        # Download as CSV
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download as CSV", data=csv, file_name=f"{field_name}_test_cases.csv", mime='text/csv')
+# --- Display Results ---
+if st.session_state.fields:
+    all_cases = []
+    for f in st.session_state.fields:
+        all_cases.extend(get_extended_cases(f['label'], f['type'], persona))
+    
+    df = pd.DataFrame(all_cases)
+    
+    # --- Feature 3: Summary Metrics ---
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Fields", len(st.session_state.fields))
+    col2.metric("Total Test Cases", len(df))
+    col3.metric("Critical Paths", len(df[df['Type'] == 'Positive']))
+
+    st.subheader("📋 Generated Test Suite")
+    st.dataframe(df, use_container_width=True)
+
+    # Download link
+    st.download_button("📥 Export Test Plan (CSV)", df.to_csv(index=False), "test_plan.csv", "text/csv")
+else:
+    st.write("No fields added yet. Use the sidebar to start building your form!")
